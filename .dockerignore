@@ -1,0 +1,38 @@
+# Ignore Git directories
+.git/
+.github/
+.gitignore
+
+# Ignore editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Ignore binaries and build artifacts
+/bin/
+/pkg/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Ignore Go vendor 
+/vendor/
+
+# Ignore logs
+*.log
+
+# Ignore any local environment files
+.env
+.env.*
+*.env
+
+# Ignore any Docker related files (we don't want to dockerize the dockerfiles)
+Dockerfile.dev
+Dockerfile.prod
+
+# Ignore go test cache
+*.test
+*.out

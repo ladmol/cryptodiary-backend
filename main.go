@@ -36,6 +36,10 @@ func main() {
 
 	// Define routes
 	r.Get("/hello", hello)
+
+	// Health check endpoint for the API and SuperTokens connection
+	r.Get("/health", healthCheck)
+
 	// Protected routes using session verification
 	r.Get("/sessioninfo", func(w http.ResponseWriter, r *http.Request) {
 		// We need to manually call VerifySession here since it returns http.HandlerFunc
@@ -45,7 +49,6 @@ func main() {
 
 	// Tenants endpoint
 	r.Get("/tenants", tenants)
-
 	// Not found handler
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -53,6 +56,7 @@ func main() {
 	})
 
 	log.Println("Starting server on port 3001...")
+	log.Printf("Connected to SuperTokens core at: %s\n", getSuperTokensURI())
 	http.ListenAndServe(":3001", r)
 }
 
@@ -84,6 +88,29 @@ func JSON(w http.ResponseWriter, statusCode int, data interface{}) {
 
 func hello(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("hello"))
+}
+
+// healthCheck checks if the server is healthy and SuperTokens core is reachable
+func healthCheck(w http.ResponseWriter, r *http.Request) {
+	// Try to get tenant information as a way to verify SuperTokens core connection
+	_, err := multitenancy.ListAllTenants()
+	status := "healthy"
+	statusCode := http.StatusOK
+
+	if err != nil {
+		status = "unhealthy"
+		statusCode = http.StatusServiceUnavailable
+		JSON(w, statusCode, map[string]interface{}{
+			"status":  status,
+			"message": "SuperTokens core connection failed: " + err.Error(),
+		})
+		return
+	}
+
+	JSON(w, statusCode, map[string]interface{}{
+		"status":  status,
+		"message": "API is running and SuperTokens core is reachable",
+	})
 }
 
 func sessioninfo(w http.ResponseWriter, r *http.Request) {

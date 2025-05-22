@@ -39,13 +39,39 @@ The back-end has two main files:
         - `/tenants`: Grabs a list of tenants for multitenant configured applications
 
 2. **Configuration (`config.go`)**
-    - `supertokensConfig`:
-        - `supertokens`:
-            - `connectionURI`: Sets the URL that your SuperTokens core is located. By default, it connects to the playground core. In production, you can [host your own core](https://supertokens.com/docs/thirdpartyemailpassword/pre-built-ui/setup/core/with-docker) or create an account to [enable managed hosting](https://supertokens.com/dashboard-saas)
+    - `supertokensConfig`:        - `supertokens`:
+            - `connectionURI`: Now set to `http://localhost:3567` to connect to the self-hosted Docker SuperTokens core. A `docker-compose.yml` file is included to easily start the SuperTokens core and PostgreSQL database locally.
         - `appInfo`: Holds informaiton like your project name
             - `apiDomain`: Sets the domain your back-end API is on. SuperTokens automatically listens to create requests at `${apiDomain}/auth`
             - `websiteDomain`: Sets the domain your front-end website is on
         - `recipeList`: An array of recipes for adding supertokens features
+
+## Self-hosted SuperTokens Core Setup
+
+This project now uses a self-hosted SuperTokens core running in Docker instead of the remote playground instance. To run the application:
+
+1. Start the SuperTokens core and PostgreSQL database:
+
+```bash
+docker-compose up -d
+```
+
+2. Run the backend server:
+
+```bash
+go run .
+```
+
+The server will start on `http://localhost:3001` and connect to the SuperTokens core running locally on `http://localhost:3567`.
+
+### Docker Compose Configuration
+
+The `docker-compose.yml` file includes:
+
+1. SuperTokens Core - The authentication service
+2. PostgreSQL - The database for storing user information
+
+Both services are configured to restart automatically and include health checks.
 
 ## Additional resources
 
