@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/supertokens/supertokens-golang/recipe/multitenancy"
 	"github.com/supertokens/supertokens-golang/recipe/session"
 	"github.com/supertokens/supertokens-golang/supertokens"
@@ -17,34 +21,42 @@ func main() {
 		panic(err.Error())
 	}
 
-	http.ListenAndServe(":3001", corsMiddleware(
-		supertokens.Middleware(http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-			// Handle your APIs..
+	// Initialize a new Chi router
+	r := chi.NewRouter()
 
-			// A public endpoint unprotected by SuperTokens
-			if r.URL.Path == "/hello" && r.Method == "GET" {
-				hello(rw, r)
-				return
-			}
+	// Add useful Chi middlewares
+	r.Use(middleware.RequestID)
+	r.Use(middleware.RealIP)
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.CleanPath)
+	r.Use(middleware.Timeout(60 * time.Second))
+	r.Use(corsMiddleware)
+	r.Use(supertokens.Middleware)
 
-			// A SuperTokens protected endpoint that returns
-			// session information
-			if r.URL.Path == "/sessioninfo" {
-				session.VerifySession(nil, sessioninfo).ServeHTTP(rw, r)
-				return
-			}
+	// Define routes
+	r.Get("/hello", hello)
+	// Protected routes using session verification
+	r.Get("/sessioninfo", func(w http.ResponseWriter, r *http.Request) {
+		// We need to manually call VerifySession here since it returns http.HandlerFunc
+		// and not a middleware that chi's router.Use expects
+		session.VerifySession(nil, sessioninfo).ServeHTTP(w, r)
+	})
 
-			// An endpoint that returns tenant lists in a
-			// multitenant configuration
-			if r.URL.Path == "/tenants" && r.Method == "GET" {
-				tenants(rw, r)
-				return
-			}
+	// Tenants endpoint
+	r.Get("/tenants", tenants)
 
-			rw.WriteHeader(404)
-		}))))
+	// Not found handler
+	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("not found"))
+	})
+
+	log.Println("Starting server on port 3001...")
+	http.ListenAndServe(":3001", r)
 }
 
+// corsMiddleware handles CORS (Cross-Origin Resource Sharing) headers
 func corsMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(response http.ResponseWriter, r *http.Request) {
 		response.Header().Set("Access-Control-Allow-Origin", "http://localhost:3000")
@@ -53,10 +65,21 @@ func corsMiddleware(next http.Handler) http.Handler {
 			response.Header().Set("Access-Control-Allow-Headers", strings.Join(append([]string{"Content-Type"}, supertokens.GetAllCORSHeaders()...), ","))
 			response.Header().Set("Access-Control-Allow-Methods", "*")
 			response.Write([]byte(""))
-		} else {
-			next.ServeHTTP(response, r)
+			return
 		}
+		next.ServeHTTP(response, r)
 	})
+}
+
+// JSON returns a formatted JSON response with a specific status code
+func JSON(w http.ResponseWriter, statusCode int, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	err := json.NewEncoder(w).Encode(data)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{"error": "error in converting to json"})
+	}
 }
 
 func hello(w http.ResponseWriter, r *http.Request) {
@@ -67,33 +90,29 @@ func sessioninfo(w http.ResponseWriter, r *http.Request) {
 	sessionContainer := session.GetSessionFromRequestContext(r.Context())
 
 	if sessionContainer == nil {
-		w.WriteHeader(500)
+		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("no session found"))
 		return
 	}
+
 	sessionData, err := sessionContainer.GetSessionDataInDatabase()
 	if err != nil {
 		err = supertokens.ErrorHandler(err, r, w)
 		if err != nil {
-			w.WriteHeader(500)
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
 		}
 		return
 	}
-	w.WriteHeader(200)
-	w.Header().Add("content-type", "application/json")
-	bytes, err := json.Marshal(map[string]interface{}{
+
+	responseData := map[string]interface{}{
 		"sessionHandle":      sessionContainer.GetHandle(),
 		"userId":             sessionContainer.GetUserID(),
 		"accessTokenPayload": sessionContainer.GetAccessTokenPayload(),
 		"sessionData":        sessionData,
-	})
-	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("error in converting to json"))
-	} else {
-		w.Write(bytes)
 	}
+
+	JSON(w, http.StatusOK, responseData)
 }
 
 func tenants(w http.ResponseWriter, r *http.Request) {
@@ -102,24 +121,16 @@ func tenants(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		err = supertokens.ErrorHandler(err, r, w)
 		if err != nil {
-			w.WriteHeader(500)
+			w.WriteHeader(http.StatusInternalServerError)
 			w.Write([]byte(err.Error()))
 		}
 		return
 	}
 
-	w.WriteHeader(200)
-	w.Header().Add("content-type", "application/json")
-
-	bytes, err := json.Marshal(map[string]interface{}{
+	responseData := map[string]interface{}{
 		"status":  "OK",
 		"tenants": tenantsList.OK.Tenants,
-	})
-
-	if err != nil {
-		w.WriteHeader(500)
-		w.Write([]byte("error in converting to json"))
-	} else {
-		w.Write(bytes)
 	}
+
+	JSON(w, http.StatusOK, responseData)
 }

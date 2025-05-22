@@ -1,8 +1,10 @@
-module go-http
+module cryptodyairy-backend
 
 go 1.24.3
 
 require github.com/supertokens/supertokens-golang v0.25.1
+
+require github.com/go-chi/chi/v5 v5.2.1
 
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0 // indirect
